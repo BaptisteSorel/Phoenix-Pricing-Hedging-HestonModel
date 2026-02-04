@@ -1,9 +1,5 @@
 # Phoenix Autocallable: Pricing & Hedging under Heston model
 
-![Python](https://img.shields.io/badge/Python-3.9%2B-blue)
-![Finance](https://img.shields.io/badge/Quant-Derivatives-green)
-![Model](https://img.shields.io/badge/Model-Heston-orange)
-
 ## Overview
 
 This project implements a complete Pricing and Hedging engine for a Phoenix Autocallable Note under the Heston Stochastic Volatility Model.
