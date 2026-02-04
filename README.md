@@ -53,10 +53,6 @@ The project simulates the lifecycle of the product and the PnL of the trading de
 
 **Scenario: Distressed Market (Crash)**
 In a scenario where the Autocall is deactivated and the market breaches the capital barrier:
-* **Unhedged PnL (Orange):** Paradoxically rises as the market falls. Since the bank is *Short* the product, the drop in the product's Fair Value (liability) generates a mark-to-market profit.
-* **Hedged PnL (Blue):** The Delta-Hedge not only stabilizes the PnL but generates **Alpha** via the **Gamma effect**. The portfolio monetizes volatility by dynamically rebalancing (buying low, selling high), outperforming the naked position.
-
-*(See `notebook.pdf` for the detailed graphs and analysis)*
 
 ---
 
