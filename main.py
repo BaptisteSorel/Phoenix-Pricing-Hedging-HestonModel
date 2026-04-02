@@ -26,8 +26,7 @@ def run_pricing():
     paths=model.simulate_paths(N,total_steps)
 
     phoenix=Phoenix(T=T,dt=dt,coupon_rate=coupon_rate,barrier_autocall=barrier_autocall,barrier_coupon=barrier_coupon,barrier_capital=barrier_capital,nominal=nominal)
-    client_payoffs=phoenix.evaluate_payoffs_prices(paths)[0]
-    product_prices=phoenix.evaluate_payoffs_prices(paths)[1]
+    client_payoffs, product_prices = phoenix.evaluate_payoffs_prices(paths)
 
     mean_payoffs=np.mean(client_payoffs)
     std_payoffs=np.std(client_payoffs)
@@ -81,6 +80,3 @@ def run_pricing():
 
 if __name__ == "__main__":
     run_pricing()
-
-if __name__ == "__main__":
-    pnl_sim.sim_delta_hedging()

@@ -5,6 +5,7 @@ from datetime import datetime
 from scipy.integrate import quad
 from scipy.optimize import minimize
 from scipy.stats import norm
+from scipy.optimize import differential_evolution
 
 #### PARAMETERS ########
 ticker=yf.Ticker("SPY")
@@ -26,13 +27,14 @@ sigma=0.5     #vol of the volatility
 rho=-0.7      #Correlation between the underlying and its vol. Its <0 in equity
 
 #Following calibration did'nt work
-"""""
+'''
 
 def get_SPY_data():
+    today=datetime.now()
     ticker=yf.Ticker("SPY")
     expirations=ticker.options
-    maturities=expirations[2],expirations[3],expirations[4] # We choose 3 different maturities
-    today=datetime.now()
+    expirations_filtered = [exp for exp in expirations if 20 < (datetime.strptime(exp, "%Y-%m-%d") - today).days < 400] # not too big, not too little
+    maturities=expirations_filtered[0],expirations_filtered[len(expirations_filtered)//3],expirations_filtered[2*len(expirations_filtered)//3],expirations_filtered[-1] # We choose 4 different maturities
 
     S0=ticker.history(period="1d")["Close"].iloc[-1]
     r=yf.Ticker("^IRX").history(period="1d")["Close"].iloc[-1] / 100 #The risk-free rate is proxied using the 13-week US Treasury Bill rate (^IRX) from Yahoo Finance.
@@ -45,10 +47,14 @@ def get_SPY_data():
 
         opt_chain=ticker.option_chain(maturity)
         calls=opt_chain.calls
-        calls=calls[calls['volume'] > 10] # We ignore illiquid options
-        calls=calls[(calls['strike'] > S0 * 0.9) & (calls['strike'] < S0 * 1.1)] # We ignore deep ITM and deep OTM calls
+        puts=opt_chain.puts
+        options = pd.concat([calls,puts])
+        options=options[options['volume'] > 10] # We ignore illiquid options
+        options = options[(options['strike'] > S0 * 0.8) & (options['strike'] < S0 * 1.2)] # We ignore deep ITM and deep OTM calls
+        options = options.nlargest(5, 'volume')  # garder les 5 plus liquides par maturité
 
-        for index, row in calls.iterrows():
+
+        for index, row in options.iterrows():
             market_price = (row['bid'] + row['ask']) / 2
             data.append({
                 'T': T,
@@ -66,38 +72,36 @@ class Heston_calibrator:
     
     def heston_characteristic_function(self,phi,S0,K,T,r,kappa,theta,sigma,rho,v0):
         rsi=rho*sigma*phi*1j
-        d=np.sqrt((rho*sigma*phi*1j-kappa)**2 + sigma**2*(phi*1j+phi**2))
+        d=np.sqrt((kappa-rsi)**2 + sigma**2*(phi*1j+phi**2))
+        if np.real(d) < 0:
+            d = -d
         g=(kappa-rsi-d)/(kappa-rsi+d)
-        
+
         exp1=np.exp(r*phi*1j*T)
-        term1=S0**(phi*1j)*((1-g*np.exp(-d*T))/(1-g))**(-2 * kappa * theta / sigma**2)
+        log_term1=phi*1j*np.log(S0) + (-2*kappa*theta/sigma**2)*np.log((1-g*np.exp(-d*T))/(1-g))
         term2=np.exp((kappa*theta / sigma**2) * (kappa - rsi - d) * T)
         term3=np.exp((v0/sigma**2)*(kappa-rsi-d)*(1-np.exp(-d*T))/(1-g*np.exp(-d*T)))
-        
-        return exp1 * term1 * term2 * term3
+
+        return exp1 * np.exp(log_term1) * term2 * term3
     
     def integral_price(self, S0, K, T, r, kappa, theta, sigma, rho, v0):
-        def integrand_1(phi):
-            num=self.heston_characteristic_function(phi - 1j, S0, K, T, r, kappa, theta, sigma, rho, v0)
-            denominator=1j * phi * S0 * np.exp(r * T)
-            return (np.exp(-1j * phi * np.log(K)) * num / denominator).real
+        phi = np.linspace(1e-4, 200, 500) 
 
-        def integrand_2(phi):
-            num=self.heston_characteristic_function(phi, S0, K, T, r, kappa, theta, sigma, rho, v0)
-            denominator=1j*phi
-            return (np.exp(-1j*phi*np.log(K))*num / denominator).real
-        
-        limit_max = 100
-        int_1, _=quad(integrand_1, 1e-8, limit_max)
-        int_2, _=quad(integrand_2, 1e-8, limit_max)
+        cf1 = np.array([self.heston_characteristic_function(p - 1j, S0, K, T, r, kappa, theta, sigma, rho, v0)
+                        for p in phi])
+        cf2 = np.array([self.heston_characteristic_function(p, S0, K, T, r, kappa, theta, sigma, rho, v0)
+                        for p in phi])
 
-        #Gil-Pelaez Formula
-        P1=0.5+(1/np.pi)*int_1
-        P2=0.5+(1/np.pi)*int_2
+        integrand_1 = (np.exp(-1j * phi * np.log(K)) * cf1 / (1j * phi * S0 * np.exp(r * T))).real
+        integrand_2 = (np.exp(-1j * phi * np.log(K)) * cf2 / (1j * phi)).real
 
-        price=S0*P1-K*np.exp(-r*T)*P2
-            
-        return price
+        int_1 = np.trapezoid(integrand_1, phi)
+        int_2 = np.trapezoid(integrand_2, phi)
+
+        #Gil Peleaz formula
+        P1 = 0.5 + int_1 / np.pi
+        P2 = 0.5 + int_2 / np.pi
+        return S0 * P1 - K * np.exp(-r * T) * P2
     
     def bs_vega(self, S, K, T, r, sigma_approx=0.2):
         if T <= 0: return 1e-6 # Sécurité
@@ -139,15 +143,11 @@ class Heston_calibrator:
         
         # Bounds
         # kappa > 0.01, theta > 0, sigma > 0, rho entre -1 et 1, v0 > 0
-        bnds = ((0.01, 15.0), (0.001, 1.0), (0.01, 2.0), (-0.99, 0.99), (0.001, 1.0))
+        bnds = ( (0.1, 8.0), (0.01, 0.15),  (0.05, 1.0),    (-0.99, -0.1), (0.005, 0.15)  )
+
         
-        result = minimize(
-            self.cost_function, 
-            x0, 
-            method='L-BFGS-B', 
-            bounds=bnds,
-            options={'disp': True, 'maxiter': 100}
-        )
+        result_global = differential_evolution(self.cost_function, bounds=bnds, maxiter=20, seed=42)
+        result = minimize(self.cost_function, result_global.x, method='L-BFGS-B', bounds=bnds)
         
         print(f"Erreur finale (RMSE) : {result.fun:.4f}")
         
@@ -165,4 +165,4 @@ if __name__ == "__main__":
     else:
         print("No data")
 
-"""
+'''

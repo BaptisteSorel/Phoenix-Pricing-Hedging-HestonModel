@@ -9,6 +9,7 @@ nominal=calibration.nominal
 T=calibration.T
 S0=calibration.S0
 r=calibration.r
+coupon_rate=calibration.coupon_rate
 
 def sim_delta_hedging():
     model=HestonModel(kappa=calibration.kappa,theta=calibration.theta,sigma=calibration.sigma,rho=calibration.rho,v0=calibration.v0,S0=S0,r=r,T=T)
@@ -30,6 +31,8 @@ def sim_delta_hedging():
     observation_dates = [int(252/4 * k) for k in range(1, int(4*T + 1))]
     product_is_alive = 1
     final_pnl_value = 0.0
+    memory_coupon=0
+    cumulative_coupons_paid = 0
 
     for i in range(1,total_steps):
         if not product_is_alive:
@@ -44,7 +47,7 @@ def sim_delta_hedging():
             perf = path[i] / S0 # S0 global ou path[0]
             
             if perf>=calibration.barrier_autocall:
-                payoff_autocall=nominal*(1+r)
+                payoff_autocall=nominal+memory_coupon*nominal+coupon_rate*nominal
                 
                 cash_from_hedge=deltas[i-1] * path[i]
                 total_cash=cash+cash_from_hedge
@@ -52,8 +55,15 @@ def sim_delta_hedging():
                 pnl_hedged[i]=final_pnl_value
                 product_is_alive=0
                 continue
+            elif perf>=calibration.barrier_coupon:
+                total_coupons=(coupon_rate + memory_coupon)*nominal
+                cash -= total_coupons
+                cumulative_coupons_paid += total_coupons
+                memory_coupon=0
+            else:
+                memory_coupon+=coupon_rate
 
-        pnl_nohedge[i]=nominal-greeks.phoenix_price(path[i],i/N_year)
+        pnl_nohedge[i]=nominal-greeks.phoenix_price(path[i],i/N_year)-cumulative_coupons_paid
         cash-=(deltas[i]-deltas[i-1])*path[i]
         pnl_hedged[i]=-greeks.phoenix_price(path[i],i/N_year)+deltas[i]*path[i]+cash
     

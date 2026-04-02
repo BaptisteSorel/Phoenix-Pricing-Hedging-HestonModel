@@ -31,13 +31,12 @@ def phoenix_price(spot,current_time):
     
     np.random.seed(1)
 
-    model=HestonModel(kappa=calibration.kappa,theta=calibration.theta,sigma=calibration.sigma,rho=calibration.rho,v0=calibration.v0,S0=spot,r=r,T=T)
+    model=HestonModel(kappa=calibration.kappa,theta=calibration.theta,sigma=calibration.sigma,rho=calibration.rho,v0=calibration.v0,S0=spot,r=r,T=remaining_T)
 
     remaining_steps=int(remaining_T * 252)
     paths=model.simulate_paths(N,remaining_steps)
 
     phoenix=Phoenix(T=remaining_T,dt=dt,coupon_rate=coupon_rate,barrier_autocall=barrier_autocall,barrier_coupon=barrier_coupon,barrier_capital=barrier_capital,nominal=nominal)
-    phoenix.evaluate_payoffs_prices(paths)[0]
     prices=phoenix.evaluate_payoffs_prices(paths)[1]
     return np.mean(prices)
 

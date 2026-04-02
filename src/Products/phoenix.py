@@ -56,5 +56,5 @@ class Phoenix :
                 else:
                     payoff+=self.nominal
             self.payoffs[i]=payoff
-            self.discounted_payoffs=self.payoffs*discount
+            self.discounted_payoffs[i]=payoff*discount
         return self.payoffs,self.discounted_payoffs
