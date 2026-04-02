@@ -23,7 +23,7 @@ The Phoenix is a yield enhancement product linked to the S&P 500 (SPY). It offer
 | **Autocall Barrier** | 100% | Early redemption if $S_t > S_0$. |
 | **Coupon Barrier** | 70% | Conditional coupon payment (Memory effect). |
 | **Capital Barrier** | 60% | **Put Down-and-In**: Capital at risk if $S_T < 60\%$. |
-| **Coupon Rate** | 6.00% p.a. | Optimized via simulation to ensure positive bank margin. |
+| **Coupon Rate** | 4.5% p.a. | Optimized via simulation to ensure positive bank margin. |
 
 ---
 
@@ -46,7 +46,7 @@ Parameters were set to reflect a realistic equity market regime, notably with a 
 ### 1. Structuring & Pricing
 The engine uses Monte Carlo simulations ($N=10^5$) to determine the Fair Value.
 * **Observation:** Initial pricing with high coupons resulted in a negative commercial margin due to the high cost of the downside protection (Digital & Put).
-* **Optimization:** The coupon was adjusted to 1.5% quarterly (6% annually) to secure a robust margin (> 2%) covering operational costs and model risk.
+* **Optimization:** The coupon was adjusted to 1.125% quarterly (4.5% annually) to secure a robust margin covering operational costs and model risk.
 
 ### 2. Delta-Hedging Simulation (The "Stress Test")
 The project simulates the lifecycle of the product and the PnL of the trading desk (Delta-Neutral strategy).
